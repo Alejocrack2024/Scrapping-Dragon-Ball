@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 
 from DragonBall.Constants.ScrapFusion import ScrapFusion
 from DragonBall.Constants.URLS import URL
-
 from DragonBall.Data.OutInformation import OutInformation
 from DragonBall.Soup.section import Section
 from DragonBall.Soup.summary import Summary
@@ -11,8 +10,9 @@ from DragonBall.Soup.tags import Tags
 
 
 class Fusions:
-    def __init__(self, name: str):
+    def __init__(self, name: str, all_data=False):
         self.name = name
+        self.all_data = all_data
 
     @classmethod
     def fusion_list(cls, fusion_list: list):
@@ -20,14 +20,17 @@ class Fusions:
 
     @staticmethod
     def list():
-        request = requests.get(URL.URL_LIST_FUSIONS)
+        request = requests.get(URL.URL_LIST_FUSIONS, headers=URL.HEADERS)
         soup = BeautifulSoup(request.content.decode('utf-8'), "html.parser")
-        summary_data = soup.find("div", {"id": "toc"}).text.strip().splitlines()
+        toc = soup.find("div", {"id": "toc"})
+        if not toc:
+            return {}
+        summary_data = toc.text.strip().splitlines()
         return Summary.clean_list_summary(summary_data, [1, -3])
 
     def fusion_information(self):
         url = URL.URL_WIKI + self.name.replace(" ", "_")
-        request = requests.get(url)
+        request = requests.get(url, headers=URL.HEADERS)
         soup = BeautifulSoup(request.content.decode('utf-8'), "html.parser")
         list_section = Section.obtain_section_data(soup, 'aside')
         basic_dict = self.__obtain_basic_data(soup, url)
@@ -42,18 +45,32 @@ class Fusions:
 
     @staticmethod
     def __get_official_name(soup: BeautifulSoup, tag: str, identification: str, element: str):
+        # Intento 1: Buscar el h1 con el id exacto
         official_name = Tags.custom_catch_error(soup, tag, identification, element)
-        return official_name.get_text(strip=True) if official_name else OutInformation.RESOURCE_NOT_FOUND
+        if official_name != OutInformation.RESOURCE_NOT_FOUND:
+            return official_name.get_text(strip=True)
+        
+        # Intento 2: Buscar CUALQUIER etiqueta <h1> en la página
+        h1 = soup.find("h1")
+        if h1:
+            return h1.get_text(strip=True)
+            
+        # Intento 3: Usar el título de la pestaña del navegador
+        if soup.title:
+            return soup.title.text.split("|")[0].strip()
+            
+        return OutInformation.RESOURCE_NOT_FOUND
 
     @staticmethod
     def __get_image(soup: BeautifulSoup, tag: str, identification: str, name: str):
-        if soup.find(tag, attrs={identification: name}):
-            return soup.find(tag, attrs={identification: name}).get("href")
+        found = soup.find(tag, attrs={identification: name})
+        if found:
+            return found.get("href")
         return OutInformation.RESOURCE_NOT_FOUND
 
     @staticmethod
     def __get_description_fusion(soup: BeautifulSoup):
-        [remove_sup.extract() for remove_sup in soup.findAll('sup')]
+        [remove_sup.extract() for remove_sup in soup.find_all('sup')]
         try:
             return next(
                 p.text.strip() for header in soup.find_all(['h2', 'h3']) if (p := header.find_next_sibling('p')))
@@ -61,21 +78,27 @@ class Fusions:
             return OutInformation.RESOURCE_NOT_FOUND
 
     def __evaluate_scrapper_section(self, list_dict, list_search, tag_found: ScrapFusion):
-        self.__return_empty_section(list_dict)
-        names = list_dict.get(list(tag_found.sections.values())[0], OutInformation.RESOURCE_NOT_FOUND)
-        data = list_dict.get(list(tag_found.sections.values())[1], OutInformation.RESOURCE_NOT_FOUND)
+        empty = self.__return_empty_section(list_dict)
+        if empty:
+            return empty
+
+        section_names = list(tag_found.sections.values())
+        names = list_dict.get(section_names[0], OutInformation.RESOURCE_NOT_FOUND)
+        data = list_dict.get(section_names[1], OutInformation.RESOURCE_NOT_FOUND)
 
         return {
-            "nombres": self.__names_section(names, tag_found.names) if list(tag_found.sections.values())[
-                                                                           0] in list_search else names,
-            "data": self.__data_section(data, tag_found.data) if list(tag_found.sections.values())[
-                                                                     1] in list_search else data,
+            "nombres": self.__names_section(names, tag_found.names) if section_names[0] in list_search else names,
+            "data": self.__data_section(data, tag_found.data) if section_names[1] in list_search else data,
         }
 
     @staticmethod
     def __return_empty_section(list_dict: dict):
         if not list_dict:
-            return {"nombres": OutInformation.RESOURCE_NOT_FOUND, "data": OutInformation.RESOURCE_NOT_FOUND}
+            return {
+                "nombres": OutInformation.RESOURCE_NOT_FOUND,
+                "data": OutInformation.RESOURCE_NOT_FOUND,
+            }
+        return None
 
     @staticmethod
     def __names_section(name, lista_tags):
@@ -85,8 +108,7 @@ class Fusions:
     def __data_section(data, lista_tags):
         return {key: Tags.clean_text(Tags.catch_error(data, value)) for key, value in lista_tags.items()}
 
-    @staticmethod
-    def __show_information(dictionary_basic, dictionary_sections):
+    def __show_information(self, dictionary_basic, dictionary_sections):
         dictionary = {
             "name": dictionary_basic['name'],
             "image": dictionary_basic['image'],
@@ -95,4 +117,6 @@ class Fusions:
             "data": dictionary_sections['data'],
             "url_scrap": dictionary_basic['url']
         }
+        if self.all_data:
+            return dictionary
         return OutInformation.clean_not_found_scrape(dictionary)

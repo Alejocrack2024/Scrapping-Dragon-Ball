@@ -20,14 +20,17 @@ class Characters:
 
     @staticmethod
     def list():
-        request = requests.get(URL.URL_LIST_CHARACTERS)
+        request = requests.get(URL.URL_LIST_CHARACTERS, headers=URL.HEADERS)
         soup = BeautifulSoup(request.content.decode('utf-8'), "html.parser")
-        summary_data = soup.find("div", {"id": "toc"}).text.strip().splitlines()
+        toc = soup.find("div", {"id": "toc"})
+        if not toc:
+            return {}
+        summary_data = toc.text.strip().splitlines()
         return Summary.clean_list_summary(summary_data, [1, -1])
 
     def character_information(self):
         url = URL.URL_WIKI + self.name.replace(" ", "_")
-        request = requests.get(url)
+        request = requests.get(url, headers=URL.HEADERS)
         soup = BeautifulSoup(request.content.decode('utf-8'), "html.parser")
         list_section = Section.obtain_section_data(soup, 'aside')
         basic_dict = self.__obtain_basic_data(soup, url)
@@ -42,18 +45,32 @@ class Characters:
 
     @staticmethod
     def __get_official_name(soup: BeautifulSoup, tag: str, identification: str, element: str):
+        # Intento 1: Buscar el h1 con el id exacto
         official_name = Tags.custom_catch_error(soup, tag, identification, element)
-        return official_name.get_text(strip=True) if official_name else OutInformation.RESOURCE_NOT_FOUND
+        if official_name != OutInformation.RESOURCE_NOT_FOUND:
+            return official_name.get_text(strip=True)
+        
+        # Intento 2: Buscar CUALQUIER etiqueta <h1> en la página
+        h1 = soup.find("h1")
+        if h1:
+            return h1.get_text(strip=True)
+            
+        # Intento 3: Usar el título de la pestaña del navegador
+        if soup.title:
+            return soup.title.text.split("|")[0].strip()
+            
+        return OutInformation.RESOURCE_NOT_FOUND
 
     @staticmethod
     def __get_image(soup: BeautifulSoup, tag: str, identification: str, name: str):
-        if soup.find(tag, attrs={identification: name}):
-            return soup.find(tag, attrs={identification: name}).get("href")
+        found = soup.find(tag, attrs={identification: name})
+        if found:
+            return found.get("href")
         return OutInformation.RESOURCE_NOT_FOUND
 
     @staticmethod
     def __get_description_character(soup: BeautifulSoup):
-        [remove_sup.extract() for remove_sup in soup.findAll('sup')]
+        [remove_sup.extract() for remove_sup in soup.find_all('sup')]
         try:
             return next(
                 p.text.strip() for header in soup.find_all(['h2', 'h3']) if (p := header.find_next_sibling('p')))
@@ -61,25 +78,30 @@ class Characters:
             return OutInformation.RESOURCE_NOT_FOUND
 
     def __evaluate_scrapper_section(self, list_dict, list_search, tag_found: ScrapCharacter):
-        self.__return_empty_section(list_dict)
-        names = list_dict.get(list(tag_found.sections.values())[0], OutInformation.RESOURCE_NOT_FOUND)
-        data = list_dict.get(list(tag_found.sections.values())[1], OutInformation.RESOURCE_NOT_FOUND)
-        debut = list_dict.get(list(tag_found.sections.values())[2], OutInformation.RESOURCE_NOT_FOUND)
+        empty = self.__return_empty_section(list_dict)
+        if empty:
+            return empty
+
+        section_names = list(tag_found.sections.values())
+        names = list_dict.get(section_names[0], OutInformation.RESOURCE_NOT_FOUND)
+        data = list_dict.get(section_names[1], OutInformation.RESOURCE_NOT_FOUND)
+        debut = list_dict.get(section_names[2], OutInformation.RESOURCE_NOT_FOUND)
 
         return {
-            "nombres": self.__names_section(names, tag_found.names) if list(tag_found.sections.values())[
-                                                                           0] in list_search else names,
-            "data": self.__data_section(data, tag_found.data) if list(tag_found.sections.values())[
-                                                                     1] in list_search else data,
-            "debut": self.__debut_section(debut, tag_found.debut) if list(tag_found.sections.values())[
-                                                                         2] in list_search else debut,
+            "nombres": self.__names_section(names, tag_found.names) if section_names[0] in list_search else names,
+            "data": self.__data_section(data, tag_found.data) if section_names[1] in list_search else data,
+            "debut": self.__debut_section(debut, tag_found.debut) if section_names[2] in list_search else debut,
         }
 
     @staticmethod
     def __return_empty_section(list_dict: dict):
         if not list_dict:
-            return {"nombres": OutInformation.RESOURCE_NOT_FOUND, "data": OutInformation.RESOURCE_NOT_FOUND,
-                    "debut": OutInformation.RESOURCE_NOT_FOUND}
+            return {
+                "nombres": OutInformation.RESOURCE_NOT_FOUND,
+                "data": OutInformation.RESOURCE_NOT_FOUND,
+                "debut": OutInformation.RESOURCE_NOT_FOUND,
+            }
+        return None
 
     @staticmethod
     def __names_section(name, lista_tags):

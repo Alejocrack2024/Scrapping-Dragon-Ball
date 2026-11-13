@@ -20,5 +20,10 @@ setup(
     classifiers=[],
     license='MIT',
     packages=find_packages(),
-    include_package_data=True
+    include_package_data=True,
+    install_requires=[
+        "requests>=2.32,<3",
+        "beautifulsoup4>=4.12,<4.15",
+    ],
+    python_requires=">=3.9",
 )

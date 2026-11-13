@@ -1,12 +1,14 @@
 Scrapper-DragonBall
 ===============
 Scrapper unofficial de Dragon Ball inspirado en su fandom. <https://dragonball.fandom.com/es/wiki/Dragon_Ball_Wiki_Hispano>. Esta api nos permite obtener datos de personajes, sagas, fusiones, lugares y videojuegos de manera sencilla. Para poder utilizarlo en nuestras aplicaciones.
-
+===============
+Requiere version python 3.9 
+===============
 Requerimientos
 ============
 Para instalar los requerimientos instale los requerimientos del archivo requirements.txt con el siguiente comando
 
-    pip install -r requirement.txt
+    pip install -r requirements.txt
 
 Importaciones
 ============

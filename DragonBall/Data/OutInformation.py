@@ -16,4 +16,13 @@ class OutInformation:
                 character.pop(key)
             elif isinstance(value, dict):
                 cls.clean_not_found_scrape(value)
+                # si el dict interno quedó vacío tras la limpieza, elimínalo
+                if not character.get(key):
+                    character.pop(key, None)
+            elif isinstance(value, list):
+                cleaned = [v for v in value if v != cls.RESOURCE_NOT_FOUND]
+                if cleaned:
+                    character[key] = cleaned
+                else:
+                    character.pop(key)
         return character

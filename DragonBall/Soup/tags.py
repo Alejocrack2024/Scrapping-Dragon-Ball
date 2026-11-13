@@ -7,15 +7,17 @@ from DragonBall.Data.OutInformation import OutInformation
 class Tags:
 
     @classmethod
-    def clean_text(cls, elem: BeautifulSoup):
+    def clean_text(cls, elem):
+        if elem is None:
+            return OutInformation.RESOURCE_NOT_FOUND
         if elem == OutInformation.RESOURCE_NOT_FOUND:
             return elem
         return cls.evaluate_clean_text(elem)
 
     @classmethod
-    def evaluate_clean_text(cls, elem: BeautifulSoup):
+    def evaluate_clean_text(cls, elem):
         text = ''
-        [remove_sup.extract() for remove_sup in elem.findAll('sup')]
+        [remove_sup.extract() for remove_sup in elem.find_all('sup')]
         for e in elem.descendants:
             if isinstance(e, str):
                 text += e
@@ -31,8 +33,14 @@ class Tags:
 
     @staticmethod
     def catch_error(section, data_source):
+        # Guarda: si section no es un Tag/BeautifulSoup, no intentes .find()
+        if not hasattr(section, "find"):
+            return OutInformation.RESOURCE_NOT_FOUND
         div = section.find("div", {"data-source": data_source})
-        return div.find("div", {"class": "pi-data-value pi-font"}) if div else OutInformation.RESOURCE_NOT_FOUND
+        if not div:
+            return OutInformation.RESOURCE_NOT_FOUND
+        value = div.find("div", {"class": "pi-data-value pi-font"})
+        return value if value else OutInformation.RESOURCE_NOT_FOUND
 
     @staticmethod
     def custom_catch_error(soup: BeautifulSoup, tag: str, identification: str, name: str):
@@ -41,5 +49,5 @@ class Tags:
 
     @staticmethod
     def __text_and_link(soup: BeautifulSoup):
-        tupla = soup.findAll('a')
+        tupla = soup.find_all('a')
         return [{"title": data.get('title'), "url": URL.URL_BASE[:-1] + data.get('href')} for data in tupla]
